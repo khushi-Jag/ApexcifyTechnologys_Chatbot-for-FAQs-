@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAQ Assistant Bot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <div class="sidebar-top">
+                <div class="logo-wrap">
+                    <div class="logo-icon">🤖</div>
+                    <div>
+                        <h2>FAQ Bot</h2>
+                        <p>Professional Assistant</p>
+                        <p> Made By: Khushi Jagwani</p>
+                        
+                    </div>
+                </div>
+
+                <button class="new-chat-btn" onclick="clearChat()">+ New Chat</button>
+            </div>
+
+            <div class="history-title">Recent Chats</div>
+            <div id="history-list" class="history-list">
+                <div class="history-empty">No chats yet</div>
+            </div>
+
+            <div class="sidebar-bottom">
+                <button class="side-btn" onclick="exportChat()">Export Chat</button>
+                <button class="side-btn danger" onclick="clearChat()">Clear Chat</button>
+            </div>
+        </aside>
+
+        <main class="main-panel">
+            <div class="top-bar">
+                <div>
+                    <h1>FAQ Assistant Bot</h1>
+                    <p>Ask about AI, Machine Learning, Python, NLP, Data Science, Web Development, and more.</p>
+                </div>
+                <div class="online-badge">Online</div>
+            </div>
+
+            <div id="chat-box" class="chat-box">
+                <div class="message bot">
+                    <div class="avatar bot-avatar">AI</div>
+                    <div class="message-content">
+                        <div class="bubble bot-bubble">
+                            Welcome. I am your professional FAQ assistant.
+                            <br><br>
+                            Try asking:
+                            <br>• What is AI?
+                            <br>• How does AI work?
+                            <br>• What is machine learning?
+                            <br>• Difference between AI and machine learning?
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="typing-indicator" class="typing hidden">
+                <span></span><span></span><span></span>
+            </div>
+
+            <div id="suggestions-box" class="suggestions-box">
+                <button class="suggestion-chip" onclick="sendMessage('What is AI?')">What is AI?</button>
+                <button class="suggestion-chip" onclick="sendMessage('How does AI work?')">How does AI work?</button>
+                <button class="suggestion-chip" onclick="sendMessage('What is machine learning?')">What is machine learning?</button>
+                <button class="suggestion-chip" onclick="sendMessage('What is NLP?')">What is NLP?</button>
+            </div>
+
+            <div class="input-bar">
+                <input type="text" id="user-input" placeholder="Ask a professional question...">
+                <button class="send-btn" onclick="sendMessage()">Send</button>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const chatHistory = [];
+
+        function addToHistory(question) {
+            const historyList = document.getElementById("history-list");
+
+            const empty = historyList.querySelector(".history-empty");
+            if (empty) {
+                empty.remove();
+            }
+
+            const item = document.createElement("div");
+            item.className = "history-item";
+            item.textContent = question.length > 34 ? question.slice(0, 34) + "..." : question;
+            item.title = question;
+            item.onclick = () => {
+                document.getElementById("user-input").value = question;
+            };
+
+            historyList.prepend(item);
+        }
+
+        function exportChat() {
+            const chatBox = document.getElementById("chat-box");
+            const text = chatBox.innerText;
+            const blob = new Blob([text], { type: "text/plain" });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "chat_history.txt";
+            a.click();
+
+            URL.revokeObjectURL(url);
+        }
+
+        function clearChat() {
+            const chatBox = document.getElementById("chat-box");
+            const historyList = document.getElementById("history-list");
+
+            chatBox.innerHTML = `
+                <div class="message bot">
+                    <div class="avatar bot-avatar">AI</div>
+                    <div class="message-content">
+                        <div class="bubble bot-bubble">
+                            Welcome. I am your professional FAQ assistant.
+                            <br><br>
+                            Try asking:
+                            <br>• What is AI?
+                            <br>• How does AI work?
+                            <br>• What is machine learning?
+                            <br>• Difference between AI and machine learning?
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            historyList.innerHTML = `<div class="history-empty">No chats yet</div>`;
+        }
+
+        async function sendMessage(customText = null) {
+            const input = document.getElementById("user-input");
+            const chatBox = document.getElementById("chat-box");
+            const typing = document.getElementById("typing-indicator");
+            const message = customText || input.value.trim();
+
+            if (message === "") return;
+
+            const userMessage = document.createElement("div");
+            userMessage.className = "message user";
+            userMessage.innerHTML = `
+                <div class="message-content user-message-content">
+                    <div class="bubble user-bubble">${message}</div>
+                </div>
+                <div class="avatar user-avatar">U</div>
+            `;
+            chatBox.appendChild(userMessage);
+
+            addToHistory(message);
+            chatHistory.push({ role: "user", content: message });
+
+            input.value = "";
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            typing.classList.remove("hidden");
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            const response = await fetch("/chat", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ message: message })
+            });
+
+            const data = await response.json();
+
+            setTimeout(() => {
+                typing.classList.add("hidden");
+
+                let metaHtml = "";
+                if (data.matched_question) {
+                    metaHtml = `
+                        <div class="meta-line">
+                            <span>Matched: ${data.matched_question}</span>
+                            <span>Confidence: ${data.confidence}</span>
+                        </div>
+                    `;
+                }
+
+                let suggestionHtml = "";
+                if (data.suggestions && data.suggestions.length > 0) {
+                    suggestionHtml = `<div class="inline-suggestions">`;
+                    data.suggestions.forEach(item => {
+                        suggestionHtml += `<button class="mini-suggestion" onclick="sendMessage('${item.replace(/'/g, "\\'")}')">${item}</button>`;
+                    });
+                    suggestionHtml += `</div>`;
+                }
+
+                const botMessage = document.createElement("div");
+                botMessage.className = "message bot";
+                botMessage.innerHTML = `
+                    <div class="avatar bot-avatar">AI</div>
+                    <div class="message-content">
+                        <div class="bubble bot-bubble">${data.reply}</div>
+                        ${metaHtml}
+                        ${suggestionHtml}
+                    </div>
+                `;
+                chatBox.appendChild(botMessage);
+
+                chatHistory.push({ role: "bot", content: data.reply });
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }, 900);
+        }
+
+        document.getElementById("user-input").addEventListener("keypress", function(event) {
+            if (event.key === "Enter") {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
